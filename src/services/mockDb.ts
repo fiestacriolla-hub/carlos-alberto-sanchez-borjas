@@ -7,11 +7,13 @@ export interface User {
   email: string;
   username: string;
   password?: string;
-  role: 'CLIENT' | 'ADMIN';
+  role: "CLIENT" | "ADMIN";
   closed_periods?: {
     compras: string[];
     ventas: string[];
   };
+  aplica_igtf?: boolean;
+  igtf_percentage?: number;
 }
 
 export interface Invoice {
@@ -20,15 +22,29 @@ export interface Invoice {
   date: string;
   invoice_number: string;
   control_number: string;
+  rif: string;
+  name: string;
+  address?: string;
   exempt_amount: number;
-  taxable_base: number;
-  vat: number;
+  taxable_base_16: number;
+  vat_16: number;
+  taxable_base_8: number;
+  vat_8: number;
   total: number;
+  retention_iva?: number;
+  total_with_retention?: number;
+  iva_perceived?: number;
+  total_collected?: number;
+  aplica_igtf?: boolean;
+  igtf_percentage?: number;
+  igtf_amount?: number;
+  is_duplicate?: boolean;
+  is_out_of_period?: boolean;
   file_data?: string;
   file_name?: string;
   file_type?: string;
   created_at: string;
-  type?: 'COMPRA' | 'VENTA';
+  type: "COMPRA" | "VENTA";
 }
 
 class MockDatabase {
@@ -47,217 +63,253 @@ class MockDatabase {
       localStorage.setItem(key, JSON.stringify(data));
     } catch (error) {
       console.error(`Error saving ${key} to localStorage`, error);
-      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        alert('El almacenamiento local está lleno. Por favor, libere espacio o elimine facturas antiguas con archivos adjuntos grandes.');
+      if (
+        error instanceof DOMException &&
+        error.name === "QuotaExceededError"
+      ) {
+        alert(
+          "El almacenamiento local está lleno. Por favor, libere espacio o elimine facturas antiguas con archivos adjuntos grandes.",
+        );
       }
     }
   }
 
   init() {
-    const users = this.get<User>('users');
-    
+    const users = this.get<User>("users");
+
     // Ensure default admin exists
-    const adminExists = users.some(u => u.username === 'admin');
+    const adminExists = users.some((u) => u.username === "admin");
     if (!adminExists) {
       const adminUser: User = {
         id: 1,
-        name: 'Administrador',
-        rif: 'J-00000000-0',
-        email: 'admin@edumar.com',
-        username: 'admin',
-        password: 'admin123', // In a real app, this would be hashed
-        role: 'ADMIN'
+        name: "Administrador",
+        rif: "J-00000000-0",
+        email: "admin@edumar.com",
+        username: "admin",
+        password: "admin123", // In a real app, this would be hashed
+        role: "ADMIN",
       };
-      
+
       // If users array is empty, just set it. Otherwise, append the admin.
       if (users.length === 0) {
-        this.set('users', [adminUser]);
+        this.set("users", [adminUser]);
       } else {
         // Ensure admin has ID 1, or just a unique ID
-        adminUser.id = Math.max(...users.map(u => u.id), 0) + 1;
-        this.set('users', [...users, adminUser]);
+        adminUser.id = Math.max(...users.map((u) => u.id), 0) + 1;
+        this.set("users", [...users, adminUser]);
       }
     }
-    
-    if (!localStorage.getItem('invoices')) {
-      this.set('invoices', []);
+
+    if (!localStorage.getItem("invoices")) {
+      this.set("invoices", []);
     }
   }
 
   // Users
   getUsers(): User[] {
-    return this.get<User>('users');
+    return this.get<User>("users");
   }
 
   getUserById(id: number): User | undefined {
-    return this.getUsers().find(u => u.id === id);
+    return this.getUsers().find((u) => u.id === id);
   }
 
   getUserByUsername(username: string): User | undefined {
-    return this.getUsers().find(u => u.username === username);
+    return this.getUsers().find((u) => u.username === username);
   }
 
-  addUser(user: Omit<User, 'id'>): User {
+  addUser(user: Omit<User, "id">): User {
     const users = this.getUsers();
-    
+
     // Check duplicates
-    if (users.some(u => u.username === user.username)) {
-      throw new Error('El nombre de usuario ya está en uso');
+    if (users.some((u) => u.username === user.username)) {
+      throw new Error("El nombre de usuario ya está en uso");
     }
-    if (users.some(u => u.email === user.email)) {
-      throw new Error('El correo electrónico ya está registrado');
+    if (users.some((u) => u.email === user.email)) {
+      throw new Error("El correo electrónico ya está registrado");
     }
-    if (users.some(u => u.rif === user.rif)) {
-      throw new Error('El RIF ya está registrado');
+    if (users.some((u) => u.rif === user.rif)) {
+      throw new Error("El RIF ya está registrado");
     }
 
     const newUser = {
       ...user,
-      id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1
+      id: users.length > 0 ? Math.max(...users.map((u) => u.id)) + 1 : 1,
     };
-    
+
     users.push(newUser);
-    this.set('users', users);
+    this.set("users", users);
     return newUser;
   }
 
   updateUser(id: number, data: Partial<User>): User {
     const users = this.getUsers();
-    const index = users.findIndex(u => u.id === id);
+    const index = users.findIndex((u) => u.id === id);
     if (index === -1) {
-      throw new Error('Usuario no encontrado');
+      throw new Error("Usuario no encontrado");
     }
     users[index] = { ...users[index], ...data };
-    this.set('users', users);
+    this.set("users", users);
     return users[index];
   }
 
-  closePeriod(userId: number, type: 'COMPRA' | 'VENTA', period: string) {
+  closePeriod(userId: number, type: "COMPRA" | "VENTA", period: string) {
     const user = this.getUserById(userId);
-    if (!user) throw new Error('Usuario no encontrado');
+    if (!user) throw new Error("Usuario no encontrado");
 
     const closed_periods = user.closed_periods || { compras: [], ventas: [] };
-    const key = type === 'COMPRA' ? 'compras' : 'ventas';
-    
+    const key = type === "COMPRA" ? "compras" : "ventas";
+
     if (!closed_periods[key].includes(period)) {
       closed_periods[key].push(period);
       this.updateUser(userId, { closed_periods });
     }
   }
 
-  isPeriodClosed(userId: number, type: 'COMPRA' | 'VENTA', period: string): boolean {
+  isPeriodClosed(
+    userId: number,
+    type: "COMPRA" | "VENTA",
+    period: string,
+  ): boolean {
     const user = this.getUserById(userId);
     if (!user || !user.closed_periods) return false;
-    const key = type === 'COMPRA' ? 'compras' : 'ventas';
+    const key = type === "COMPRA" ? "compras" : "ventas";
     return user.closed_periods[key].includes(period);
   }
 
   createDemoData() {
     const users = this.getUsers();
-    if (!users.some(u => u.username === 'demo')) {
+    if (!users.some((u) => u.username === "demo")) {
       const demoUser = this.addUser({
-        name: 'Empresa Demo C.A.',
-        rif: 'J-12345678-9',
-        email: 'demo@edumar.com',
-        username: 'demo',
-        password: 'demo',
-        role: 'CLIENT',
-        closed_periods: { compras: ['2026-01'], ventas: [] }
+        name: "Empresa Demo C.A.",
+        rif: "J-12345678-9",
+        email: "demo@edumar.com",
+        username: "demo",
+        password: "demo",
+        role: "CLIENT",
+        closed_periods: { compras: ["2026-01"], ventas: [] },
       });
 
       // Add some demo invoices
-      const demoInvoices: Omit<Invoice, 'id' | 'created_at'>[] = [
+      const demoInvoices: Omit<Invoice, "id" | "created_at">[] = [
         {
           user_id: demoUser.id,
-          date: '2026-01-15',
-          invoice_number: '001-0001',
-          control_number: '00-0001',
+          date: "2026-01-15",
+          invoice_number: "001-0001",
+          control_number: "00-0001",
+          rif: "J-12345678-9",
+          name: "Proveedor de Ejemplo C.A.",
           exempt_amount: 0,
-          taxable_base: 1000,
-          vat: 160,
+          taxable_base_16: 1000,
+          vat_16: 160,
+          taxable_base_8: 0,
+          vat_8: 0,
           total: 1160,
-          type: 'COMPRA'
+          type: "COMPRA",
         },
         {
           user_id: demoUser.id,
-          date: '2026-02-10',
-          invoice_number: '001-0002',
-          control_number: '00-0002',
+          date: "2026-02-10",
+          invoice_number: "001-0002",
+          control_number: "00-0002",
+          rif: "J-98765432-1",
+          name: "Servicios Múltiples S.A.",
           exempt_amount: 50,
-          taxable_base: 2000,
-          vat: 320,
+          taxable_base_16: 2000,
+          vat_16: 320,
+          taxable_base_8: 0,
+          vat_8: 0,
           total: 2370,
-          type: 'COMPRA'
+          type: "COMPRA",
         },
         {
           user_id: demoUser.id,
-          date: '2026-02-15',
-          invoice_number: 'V-0001',
-          control_number: '00-0001',
+          date: "2026-02-15",
+          invoice_number: "V-0001",
+          control_number: "00-0001",
+          rif: "V-12345678-0",
+          name: "Cliente Final",
           exempt_amount: 0,
-          taxable_base: 5000,
-          vat: 800,
+          taxable_base_16: 5000,
+          vat_16: 800,
+          taxable_base_8: 0,
+          vat_8: 0,
           total: 5800,
-          type: 'VENTA'
-        }
+          type: "VENTA",
+        },
       ];
 
-      demoInvoices.forEach(inv => this.addInvoice(inv));
+      demoInvoices.forEach((inv) => this.addInvoice(inv));
     }
   }
 
   // Invoices
   getInvoices(userId?: number): Invoice[] {
-    const invoices = this.get<Invoice>('invoices');
+    const invoices = this.get<Invoice>("invoices");
     if (userId) {
-      return invoices.filter(i => i.user_id === userId);
+      return invoices.filter((i) => i.user_id === userId);
     }
     return invoices;
   }
 
-  addInvoice(invoice: Omit<Invoice, 'id' | 'created_at'>): Invoice {
-    const invoices = this.get<Invoice>('invoices');
-    
+  addInvoice(invoice: Omit<Invoice, "id" | "created_at">): Invoice {
+    const invoices = this.get<Invoice>("invoices");
+
     // Check duplicates
-    if (invoices.some(i => i.user_id === invoice.user_id && i.invoice_number === invoice.invoice_number && i.control_number === invoice.control_number)) {
-      throw new Error('Factura duplicada detectada');
-    }
+    const isDuplicate = invoices.some(
+      (i) =>
+        i.user_id === invoice.user_id &&
+        i.type === invoice.type &&
+        i.invoice_number === invoice.invoice_number &&
+        i.control_number === invoice.control_number &&
+        i.rif === invoice.rif
+    );
+
+    // Check if out of period (e.g., date is not in the current month)
+    // For simplicity, we'll assume the current month is the period, or we can check if it's closed.
+    // Let's just check if the period is closed.
+    const month = invoice.date.substring(0, 7);
+    const isOutOfPeriod = this.isPeriodClosed(invoice.user_id, invoice.type || "COMPRA", month);
 
     const newInvoice = {
       ...invoice,
-      id: invoices.length > 0 ? Math.max(...invoices.map(i => i.id)) + 1 : 1,
+      id: invoices.length > 0 ? Math.max(...invoices.map((i) => i.id)) + 1 : 1,
       created_at: new Date().toISOString(),
-      type: invoice.type || 'COMPRA'
+      type: invoice.type || "COMPRA",
+      is_duplicate: isDuplicate,
+      is_out_of_period: isOutOfPeriod,
     };
-    
+
     invoices.push(newInvoice);
-    this.set('invoices', invoices);
+    this.set("invoices", invoices);
     return newInvoice;
   }
 
   updateInvoice(id: number, userId: number, data: Partial<Invoice>): Invoice {
-    const invoices = this.get<Invoice>('invoices');
-    const index = invoices.findIndex(i => i.id === id && i.user_id === userId);
-    
+    const invoices = this.get<Invoice>("invoices");
+    const index = invoices.findIndex(
+      (i) => i.id === id && i.user_id === userId,
+    );
+
     if (index === -1) {
-      throw new Error('Factura no encontrada o no autorizada');
+      throw new Error("Factura no encontrada o no autorizada");
     }
 
     invoices[index] = { ...invoices[index], ...data };
-    this.set('invoices', invoices);
+    this.set("invoices", invoices);
     return invoices[index];
   }
 
   deleteInvoice(id: number, userId: number) {
-    let invoices = this.get<Invoice>('invoices');
+    let invoices = this.get<Invoice>("invoices");
     const initialLength = invoices.length;
-    invoices = invoices.filter(i => !(i.id === id && i.user_id === userId));
-    
+    invoices = invoices.filter((i) => !(i.id === id && i.user_id === userId));
+
     if (invoices.length === initialLength) {
-      throw new Error('Factura no encontrada o no autorizada');
+      throw new Error("Factura no encontrada o no autorizada");
     }
-    
-    this.set('invoices', invoices);
+
+    this.set("invoices", invoices);
   }
 }
 

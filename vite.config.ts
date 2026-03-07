@@ -17,8 +17,27 @@ export default defineConfig(({mode}) => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          entryFileNames: 'js/[name]-[hash].js',
+          chunkFileNames: 'js/[name]-[hash].js',
+          assetFileNames: (assetInfo) => {
+            let extType = 'assets';
+            if (assetInfo.name) {
+              if (/\.(css)$/.test(assetInfo.name)) {
+                extType = 'css';
+              } else if (/\.(png|jpe?g|svg|gif|tiff|bmp|ico)$/i.test(assetInfo.name)) {
+                extType = 'img';
+              }
+            }
+            return `${extType}/[name]-[hash][extname]`;
+          },
+        },
+      },
     },
   };
 });

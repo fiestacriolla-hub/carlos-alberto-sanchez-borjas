@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { mockDb, User } from '../services/mockDb';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { mockDb, User } from "../services/mockDb";
 
 interface AuthContextType {
   user: User | null;
@@ -20,13 +20,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Check localStorage for session
     try {
-      const storedUser = localStorage.getItem('session_user');
+      const storedUser = localStorage.getItem("session_user");
       if (storedUser) {
         setUser(JSON.parse(storedUser));
       }
     } catch (error) {
-      console.error('Error parsing session user:', error);
-      localStorage.removeItem('session_user');
+      console.error("Error parsing session user:", error);
+      localStorage.removeItem("session_user");
     }
     setLoading(false);
   }, []);
@@ -34,12 +34,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = (userData: User) => {
     // Remove password before saving to session
     const { password, ...safeUser } = userData;
-    localStorage.setItem('session_user', JSON.stringify(safeUser));
+    localStorage.setItem("session_user", JSON.stringify(safeUser));
     setUser(safeUser as User);
   };
 
   const logout = () => {
-    localStorage.removeItem('session_user');
+    localStorage.removeItem("session_user");
     setUser(null);
   };
 
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
