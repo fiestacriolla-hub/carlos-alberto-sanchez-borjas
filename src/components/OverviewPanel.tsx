@@ -246,8 +246,8 @@ export default function OverviewPanel({ invoices, client }: OverviewPanelProps) 
         {/* Charts */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <h3 className="text-lg font-bold text-slate-800 mb-6">Compras vs Ventas</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ width: "100%", height: "300px" }}>
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart data={barChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
@@ -263,11 +263,11 @@ export default function OverviewPanel({ invoices, client }: OverviewPanelProps) 
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <h3 className="text-lg font-bold text-slate-800 mb-6">IVA Débito vs Crédito</h3>
-          <div className="h-64 flex items-center justify-center">
+          <div style={{ width: "100%", height: "300px" }} className="flex items-center justify-center">
             {stats.comprasIva === 0 && stats.ventasIva === 0 ? (
               <p className="text-slate-500">No hay datos de IVA para este período</p>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
                     data={pieChartData}
